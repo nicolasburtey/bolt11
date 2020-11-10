@@ -7,37 +7,30 @@ const Buffer = require('safe-buffer').Buffer
 const BN = require('bn.js')
 const bitcoinjsAddress = require('bitcoinjs-lib/src/address')
 const cloneDeep = require('lodash/cloneDeep')
-const coininfo = require('coininfo')
-
-const BITCOINJS_NETWORK_INFO = {
-  bitcoin: coininfo.bitcoin.main.toBitcoinJS(),
-  testnet: coininfo.bitcoin.test.toBitcoinJS(),
-  regtest: coininfo.bitcoin.regtest.toBitcoinJS(),
-  litecoin: coininfo.litecoin.main.toBitcoinJS(),
-  litecoin_testnet: coininfo.litecoin.test.toBitcoinJS()
-}
-BITCOINJS_NETWORK_INFO.bitcoin.bech32 = 'bc'
-BITCOINJS_NETWORK_INFO.testnet.bech32 = 'tb'
-BITCOINJS_NETWORK_INFO.regtest.bech32 = 'bcrt'
-BITCOINJS_NETWORK_INFO.litecoin.bech32 = 'ltc'
-BITCOINJS_NETWORK_INFO.litecoin_testnet.bech32 = 'tltc'
 
 // defaults for encode; default timestamp is current time at call
-const DEFAULTNETWORKSTRING = 'testnet'
-const DEFAULTNETWORK = BITCOINJS_NETWORK_INFO[DEFAULTNETWORKSTRING]
+const DEFAULTNETWORK = {
+  // default network is bitcoin
+  bech32: 'bc',
+  pubKeyHash: 0x00,
+  scriptHash: 0x05,
+  validWitnessVersions: [0]
+}
+const TESTNETWORK = {
+  bech32: 'tb',
+  pubKeyHash: 0x6f,
+  scriptHash: 0xc4,
+  validWitnessVersions: [0]
+}
+const SIMNETWORK = {
+  bech32: 'sb',
+  pubKeyHash: 0x3f,
+  scriptHash: 0x7b,
+  validWitnessVersions: [0]
+}
 const DEFAULTEXPIRETIME = 3600
 const DEFAULTCLTVEXPIRY = 9
 const DEFAULTDESCRIPTION = ''
-
-const VALIDWITNESSVERSIONS = [0]
-
-const BECH32CODES = {
-  bc: 'bitcoin',
-  tb: 'testnet',
-  bcrt: 'regtest',
-  ltc: 'litecoin',
-  tltc: 'litecoin_testnet'
-}
 
 const DIVISORS = {
   m: new BN(1e3, 10),
@@ -68,8 +61,8 @@ const TAGCODES = {
 // reverse the keys and values of TAGCODES and insert into TAGNAMES
 const TAGNAMES = {}
 for (let i = 0, keys = Object.keys(TAGCODES); i < keys.length; i++) {
-  let currentName = keys[i]
-  let currentCode = TAGCODES[keys[i]].toString()
+  const currentName = keys[i]
+  const currentCode = TAGCODES[keys[i]].toString()
   TAGNAMES[currentCode] = currentName
 }
 
@@ -85,15 +78,14 @@ const TAGENCODERS = {
 }
 
 const TAGPARSERS = {
-  '1': (words) => wordsToBuffer(words, true).toString('hex'), // 256 bits
-  '13': (words) => wordsToBuffer(words, true).toString('utf8'), // string variable length
-  '19': (words) => wordsToBuffer(words, true).toString('hex'), // 264 bits
-  '23': (words) => wordsToBuffer(words, true).toString('hex'), // 256 bits
-  '31': (words) => wordsToBuffer(words, true).toString('utf8'), // string variable length
-  '6': wordsToIntBE, // default: 3600 (1 hour)
-  '24': wordsToIntBE, // default: 9
-  '9': fallbackAddressParser,
-  '3': routingInfoParser // for extra routing info (private etc.)
+  1: (words) => wordsToBuffer(words, true).toString('hex'), // 256 bits
+  13: (words) => wordsToBuffer(words, true).toString('utf8'), // string variable length
+  19: (words) => wordsToBuffer(words, true).toString('hex'), // 264 bits
+  23: (words) => wordsToBuffer(words, true).toString('hex'), // 256 bits
+  6: wordsToIntBE, // default: 3600 (1 hour)
+  24: wordsToIntBE, // default: 9
+  9: fallbackAddressParser,
+  3: routingInfoParser // for extra routing info (private etc.)
 }
 
 const unknownTagName = 'unknownTag'
@@ -117,7 +109,7 @@ function wordsToIntBE (words) {
 }
 
 function intBEToWords (intBE, bits) {
-  let words = []
+  const words = []
   if (bits === undefined) bits = 5
   intBE = Math.floor(intBE)
   if (intBE === 0) return [0]
@@ -135,9 +127,9 @@ function sha256 (data) {
 function convert (data, inBits, outBits) {
   let value = 0
   let bits = 0
-  let maxV = (1 << outBits) - 1
+  const maxV = (1 << outBits) - 1
 
-  let result = []
+  const result = []
   for (let i = 0; i < data.length; ++i) {
     value = (value << inBits) | data[i]
     bits += inBits
@@ -177,22 +169,22 @@ function textToBuffer (text) {
 }
 
 function hexToWord (hex) {
-  let buffer = hexToBuffer(hex)
+  const buffer = hexToBuffer(hex)
   return bech32.toWords(buffer)
 }
 
 function textToWord (text) {
-  let buffer = textToBuffer(text)
-  let words = bech32.toWords(buffer)
+  const buffer = textToBuffer(text)
+  const words = bech32.toWords(buffer)
   return words
 }
 
 // see encoder for details
 function fallbackAddressParser (words, network) {
-  let version = words[0]
+  const version = words[0]
   words = words.slice(1)
 
-  let addressHash = wordsToBuffer(words, true)
+  const addressHash = wordsToBuffer(words, true)
 
   let address = null
 
@@ -226,7 +218,7 @@ function fallbackAddressEncoder (data, network) {
 // first convert from words to buffer, trimming padding where necessary
 // parse in 51 byte chunks. See encoder for details.
 function routingInfoParser (words) {
-  let routes = []
+  const routes = []
   let pubkey, shortChannelId, feeBaseMSats, feeProportionalMillionths, cltvExpiryDelta
   let routesBuffer = wordsToBuffer(words, true)
   while (routesBuffer.length > 0) {
@@ -284,8 +276,8 @@ function purposeCommitEncoder (data) {
 }
 
 function tagsItems (tags, tagName) {
-  let tag = tags.filter(item => item.tagName === tagName)
-  let data = tag.length > 0 ? tag[0].data : null
+  const tag = tags.filter(item => item.tagName === tagName)
+  const data = tag.length > 0 ? tag[0].data : null
   return data
 }
 
@@ -294,7 +286,7 @@ function tagsContainItem (tags, tagName) {
 }
 
 function orderKeys (unorderedObj) {
-  let orderedObj = {}
+  const orderedObj = {}
   Object.keys(unorderedObj).sort().forEach((key) => {
     orderedObj[key] = unorderedObj[key]
   })
@@ -305,7 +297,7 @@ function satToHrp (satoshis) {
   if (!satoshis.toString().match(/^\d+$/)) {
     throw new Error('satoshis must be an integer')
   }
-  let millisatoshisBN = new BN(satoshis, 10)
+  const millisatoshisBN = new BN(satoshis, 10)
   return millisatToHrp(millisatoshisBN.mul(new BN(1000, 10)))
 }
 
@@ -313,9 +305,9 @@ function millisatToHrp (millisatoshis) {
   if (!millisatoshis.toString().match(/^\d+$/)) {
     throw new Error('millisatoshis must be an integer')
   }
-  let millisatoshisBN = new BN(millisatoshis, 10)
-  let millisatoshisString = millisatoshisBN.toString(10)
-  let millisatoshisLength = millisatoshisString.length
+  const millisatoshisBN = new BN(millisatoshis, 10)
+  const millisatoshisString = millisatoshisBN.toString(10)
+  const millisatoshisLength = millisatoshisString.length
   let divisorString, valueString
   if (millisatoshisLength > 11 && /0{11}$/.test(millisatoshisString)) {
     divisorString = ''
@@ -337,11 +329,11 @@ function millisatToHrp (millisatoshis) {
 }
 
 function hrpToSat (hrpString, outputString) {
-  let millisatoshisBN = hrpToMillisat(hrpString, false)
+  const millisatoshisBN = hrpToMillisat(hrpString, false)
   if (!millisatoshisBN.mod(new BN(1000, 10)).eq(new BN(0, 10))) {
     throw new Error('Amount is outside of valid range')
   }
-  let result = millisatoshisBN.div(new BN(1000, 10))
+  const result = millisatoshisBN.div(new BN(1000, 10))
   return outputString ? result.toString() : result
 }
 
@@ -358,9 +350,9 @@ function hrpToMillisat (hrpString, outputString) {
 
   if (!value.match(/^\d+$/)) throw new Error('Not a valid human readable amount')
 
-  let valueBN = new BN(value, 10)
+  const valueBN = new BN(value, 10)
 
-  let millisatoshisBN = divisor
+  const millisatoshisBN = divisor
     ? valueBN.mul(MILLISATS_PER_BTC).div(DIVISORS[divisor])
     : valueBN.mul(MILLISATS_PER_BTC)
 
@@ -373,8 +365,8 @@ function hrpToMillisat (hrpString, outputString) {
 }
 
 function sign (inputPayReqObj, inputPrivateKey) {
-  let payReqObj = cloneDeep(inputPayReqObj)
-  let privateKey = hexToBuffer(inputPrivateKey)
+  const payReqObj = cloneDeep(inputPayReqObj)
+  const privateKey = hexToBuffer(inputPrivateKey)
   if (payReqObj.complete && payReqObj.paymentRequest) return payReqObj
 
   if (privateKey === undefined || privateKey.length !== 32 ||
@@ -399,27 +391,27 @@ function sign (inputPayReqObj, inputPrivateKey) {
   // make sure if either exist they are in nodePublicKey
   nodePublicKey = tagNodePublicKey || nodePublicKey
 
-  let publicKey = secp256k1.publicKeyCreate(privateKey)
+  const publicKey = secp256k1.publicKeyCreate(privateKey)
 
   // Check if pubkey matches for private key
   if (nodePublicKey && !publicKey.equals(nodePublicKey)) {
     throw new Error('The private key given is not the private key of the node public key given')
   }
 
-  let words = bech32.decode(payReqObj.wordsTemp, Number.MAX_SAFE_INTEGER).words
+  const words = bech32.decode(payReqObj.wordsTemp, Number.MAX_SAFE_INTEGER).words
 
   // the preimage for the signing data is the buffer of the prefix concatenated
   // with the buffer conversion of the data words excluding the signature
   // (right padded with 0 bits)
-  let toSign = Buffer.concat([Buffer.from(payReqObj.prefix, 'utf8'), wordsToBuffer(words)])
+  const toSign = Buffer.concat([Buffer.from(payReqObj.prefix, 'utf8'), wordsToBuffer(words)])
   // single SHA256 hash for the signature
-  let payReqHash = sha256(toSign)
+  const payReqHash = sha256(toSign)
 
   // signature is 64 bytes (32 byte r value and 32 byte s value concatenated)
   // PLUS one extra byte appended to the right with the recoveryID in [0,1,2,3]
   // Then convert to 5 bit words with right padding 0 bits.
-  let sigObj = secp256k1.sign(payReqHash, privateKey)
-  let sigWords = hexToWord(sigObj.signature.toString('hex') + '0' + sigObj.recovery)
+  const sigObj = secp256k1.sign(payReqHash, privateKey)
+  const sigWords = hexToWord(sigObj.signature.toString('hex') + '0' + sigObj.recovery)
 
   // append signature words to the words, mark as complete, and add the payreq
   payReqObj.payeeNodeKey = publicKey.toString('hex')
@@ -448,24 +440,29 @@ function sign (inputPayReqObj, inputPrivateKey) {
 */
 function encode (inputData, addDefaults) {
   // we don't want to affect the data being passed in, so we copy the object
-  let data = cloneDeep(inputData)
+  const data = cloneDeep(inputData)
 
   // by default we will add default values to description, expire time, and min cltv
   if (addDefaults === undefined) addDefaults = true
 
-  let canReconstruct = !(data.signature === undefined || data.recoveryFlag === undefined)
+  const canReconstruct = !(data.signature === undefined || data.recoveryFlag === undefined)
 
   // if no cointype is defined, set to testnet
   let coinTypeObj
-  if (data.coinType === undefined && !canReconstruct) {
-    data.coinType = DEFAULTNETWORKSTRING
+  if (data.network === undefined && !canReconstruct) {
+    data.network = DEFAULTNETWORK
     coinTypeObj = DEFAULTNETWORK
-  } else if (data.coinType === undefined && canReconstruct) {
-    throw new Error('Need coinType for proper payment request reconstruction')
+  } else if (data.network === undefined && canReconstruct) {
+    throw new Error('Need network for proper payment request reconstruction')
   } else {
     // if the coinType is not a valid name of a network in bitcoinjs-lib, fail
-    if (!BITCOINJS_NETWORK_INFO[data.coinType]) throw new Error('Unknown coin type')
-    coinTypeObj = BITCOINJS_NETWORK_INFO[data.coinType]
+    if (
+      !data.network.bech32 ||
+      data.network.pubKeyHash === undefined ||
+      data.network.scriptHash === undefined ||
+      !Array.isArray(data.network.validWitnessVersions)
+    ) throw new Error('Invalid network')
+    coinTypeObj = data.network
   }
 
   // use current time as default timestamp (seconds)
@@ -533,7 +530,7 @@ function encode (inputData, addDefaults) {
   let code, addressHash, address
   // If there is a fallback address tag we must check it is valid
   if (tagsContainItem(data.tags, TAGNAMES['9'])) {
-    let addrData = tagsItems(data.tags, TAGNAMES['9'])
+    const addrData = tagsItems(data.tags, TAGNAMES['9'])
     // Most people will just provide address so Hash and code will be undefined here
     address = addrData.address
     addressHash = addrData.addressHash
@@ -558,7 +555,7 @@ function encode (inputData, addDefaults) {
           throw new Error('Fallback address type is unknown')
         }
       }
-      if (bech32addr && !(bech32addr.version in VALIDWITNESSVERSIONS)) {
+      if (bech32addr && !(bech32addr.version in coinTypeObj.validWitnessVersions)) {
         throw new Error('Fallback address witness version is unknown')
       }
       if (bech32addr && bech32addr.prefix !== coinTypeObj.bech32) {
@@ -580,7 +577,7 @@ function encode (inputData, addDefaults) {
 
   // If there is route info tag, check that each route has all 4 necessary info
   if (tagsContainItem(data.tags, TAGNAMES['3'])) {
-    let routingInfo = tagsItems(data.tags, TAGNAMES['3'])
+    const routingInfo = tagsItems(data.tags, TAGNAMES['3'])
     routingInfo.forEach(route => {
       if (route.pubkey === undefined ||
         route.short_channel_id === undefined ||
@@ -592,7 +589,7 @@ function encode (inputData, addDefaults) {
       if (!secp256k1.publicKeyVerify(hexToBuffer(route.pubkey))) {
         throw new Error('Routing info pubkey is not a valid pubkey')
       }
-      let shortId = hexToBuffer(route.short_channel_id)
+      const shortId = hexToBuffer(route.short_channel_id)
       if (!(shortId instanceof Buffer) || shortId.length !== 8) {
         throw new Error('Routing info short channel id must be 8 bytes')
       }
@@ -619,7 +616,7 @@ function encode (inputData, addDefaults) {
   // divisor (m = milli, u = micro, n = nano, p = pico)
   if (data.millisatoshis && data.satoshis) {
     hrpString = millisatToHrp(new BN(data.millisatoshis, 10))
-    let hrpStringSat = satToHrp(new BN(data.satoshis, 10))
+    const hrpStringSat = satToHrp(new BN(data.satoshis, 10))
     if (hrpStringSat !== hrpString) {
       throw new Error('satoshis and millisatoshis do not match')
     }
@@ -636,9 +633,9 @@ function encode (inputData, addDefaults) {
   prefix += hrpString
 
   // timestamp converted to 5 bit number array (left padded with 0 bits, NOT right padded)
-  let timestampWords = intBEToWords(data.timestamp)
+  const timestampWords = intBEToWords(data.timestamp)
 
-  let tags = data.tags
+  const tags = data.tags
   let tagWords = []
   tags.forEach(tag => {
     const possibleTagNames = Object.keys(TAGENCODERS)
@@ -656,7 +653,7 @@ function encode (inputData, addDefaults) {
       const encoder = TAGENCODERS[tag.tagName]
       words = encoder(tag.data)
     } else {
-      let result = unknownEncoder(tag.data)
+      const result = unknownEncoder(tag.data)
       tagWords.push(result.tagCode)
       words = result.words
     }
@@ -674,9 +671,9 @@ function encode (inputData, addDefaults) {
   // the preimage for the signing data is the buffer of the prefix concatenated
   // with the buffer conversion of the data words excluding the signature
   // (right padded with 0 bits)
-  let toSign = Buffer.concat([Buffer.from(prefix, 'utf8'), Buffer.from(convert(dataWords, 5, 8))])
+  const toSign = Buffer.concat([Buffer.from(prefix, 'utf8'), Buffer.from(convert(dataWords, 5, 8))])
   // single SHA256 hash for the signature
-  let payReqHash = sha256(toSign)
+  const payReqHash = sha256(toSign)
 
   // signature is 64 bytes (32 byte r value and 32 byte s value concatenated)
   // PLUS one extra byte appended to the right with the recoveryID in [0,1,2,3]
@@ -692,7 +689,7 @@ function encode (inputData, addDefaults) {
     Earlier we check if the private key matches the payee node key IF they
     gave one. */
     if (nodePublicKey) {
-      let recoveredPubkey = secp256k1.recover(payReqHash, Buffer.from(data.signature, 'hex'), data.recoveryFlag, true)
+      const recoveredPubkey = secp256k1.recover(payReqHash, Buffer.from(data.signature, 'hex'), data.recoveryFlag, true)
       if (nodePublicKey && !nodePublicKey.equals(recoveredPubkey)) {
         throw new Error('Signature, message, and recoveryID did not produce the same pubkey as payeeNodeKey')
       }
@@ -724,21 +721,21 @@ function encode (inputData, addDefaults) {
 function decode (paymentRequest, network) {
   if (typeof paymentRequest !== 'string') throw new Error('Lightning Payment Request must be string')
   if (paymentRequest.slice(0, 2).toLowerCase() !== 'ln') throw new Error('Not a proper lightning payment request')
-  let decoded = bech32.decode(paymentRequest, Number.MAX_SAFE_INTEGER)
+  const decoded = bech32.decode(paymentRequest, Number.MAX_SAFE_INTEGER)
   paymentRequest = paymentRequest.toLowerCase()
-  let prefix = decoded.prefix
+  const prefix = decoded.prefix
   let words = decoded.words
 
   // signature is always 104 words on the end
   // cutting off at the beginning helps since there's no way to tell
   // ahead of time how many tags there are.
-  let sigWords = words.slice(-104)
+  const sigWords = words.slice(-104)
   // grabbing a copy of the words for later, words will be sliced as we parse.
-  let wordsNoSig = words.slice(0, -104)
+  const wordsNoSig = words.slice(0, -104)
   words = words.slice(0, -104)
 
   let sigBuffer = wordsToBuffer(sigWords, true)
-  let recoveryFlag = sigBuffer.slice(-1)[0]
+  const recoveryFlag = sigBuffer.slice(-1)[0]
   sigBuffer = sigBuffer.slice(0, -1)
 
   if (!(recoveryFlag in [0, 1, 2, 3]) || sigBuffer.length !== 64) {
@@ -756,23 +753,37 @@ function decode (paymentRequest, network) {
     throw new Error('Not a proper lightning payment request')
   }
 
-  let bech32Prefix = prefixMatches[1]
-  let coinNetwork, coinType
-  if (BECH32CODES[bech32Prefix]) {
-    coinType = BECH32CODES[bech32Prefix]
-    coinNetwork = BITCOINJS_NETWORK_INFO[coinType]
-  } else if (network && network.bech32) {
-    coinType = 'unknown'
+  const bech32Prefix = prefixMatches[1]
+  let coinNetwork
+  if (!network) {
+    switch (bech32Prefix) {
+      case DEFAULTNETWORK.bech32:
+        coinNetwork = DEFAULTNETWORK
+        break
+      case TESTNETWORK.bech32:
+        coinNetwork = TESTNETWORK
+        break
+      case SIMNETWORK.bech32:
+        coinNetwork = SIMNETWORK
+        break
+    }
+  } else {
+    if (
+      network.bech32 === undefined ||
+      network.pubKeyHash === undefined ||
+      network.scriptHash === undefined ||
+      !Array.isArray(network.validWitnessVersions)
+    ) throw new Error('Invalid network')
     coinNetwork = network
   }
   if (!coinNetwork || coinNetwork.bech32 !== bech32Prefix) {
     throw new Error('Unknown coin bech32 prefix')
   }
 
-  let value = prefixMatches[2]
+  const value = prefixMatches[2]
   let satoshis, millisatoshis, removeSatoshis
   if (value) {
-    let divisor = prefixMatches[3]
+    const divisor = prefixMatches[3]
     try {
       satoshis = parseInt(hrpToSat(value + divisor, true))
     } catch (e) {
@@ -786,16 +797,16 @@ function decode (paymentRequest, network) {
   }
 
   // reminder: left padded 0 bits
-  let timestamp = wordsToIntBE(words.slice(0, 7))
-  let timestampString = new Date(timestamp * 1000).toISOString()
+  const timestamp = wordsToIntBE(words.slice(0, 7))
+  const timestampString = new Date(timestamp * 1000).toISOString()
   words = words.slice(7) // trim off the left 7 words
 
-  let tags = []
+  const tags = []
   let tagName, parser, tagLength, tagWords
   // we have no tag count to go on, so just keep hacking off words
   // until we have none.
   while (words.length > 0) {
-    let tagCode = words[0].toString()
+    const tagCode = words[0].toString()
     tagName = TAGNAMES[tagCode] || unknownTagName
     parser = TAGPARSERS[tagCode] || getUnknownParser(tagCode)
     words = words.slice(1)
@@ -821,9 +832,9 @@ function decode (paymentRequest, network) {
     timeExpireDateString = new Date(timeExpireDate * 1000).toISOString()
   }
 
-  let toSign = Buffer.concat([Buffer.from(prefix, 'utf8'), Buffer.from(convert(wordsNoSig, 5, 8))])
-  let payReqHash = sha256(toSign)
-  let sigPubkey = secp256k1.recover(payReqHash, sigBuffer, recoveryFlag, true)
+  const toSign = Buffer.concat([Buffer.from(prefix, 'utf8'), Buffer.from(convert(wordsNoSig, 5, 8))])
+  const payReqHash = sha256(toSign)
+  const sigPubkey = secp256k1.recover(payReqHash, sigBuffer, recoveryFlag, true)
   if (tagsContainItem(tags, TAGNAMES['19']) && tagsItems(tags, TAGNAMES['19']) !== sigPubkey.toString('hex')) {
     throw new Error('Lightning Payment Request signature pubkey does not match payee pubkey')
   }
@@ -833,7 +844,7 @@ function decode (paymentRequest, network) {
     complete: true,
     prefix,
     wordsTemp: bech32.encode('temp', wordsNoSig.concat(sigWords), Number.MAX_SAFE_INTEGER),
-    coinType,
+    network: coinNetwork,
     satoshis,
     millisatoshis,
     timestamp,
@@ -845,11 +856,11 @@ function decode (paymentRequest, network) {
   }
 
   if (removeSatoshis) {
-    delete finalResult['satoshis']
+    delete finalResult.satoshis
   }
 
   if (timeExpireDate) {
-    finalResult = Object.assign(finalResult, {timeExpireDate, timeExpireDateString})
+    finalResult = Object.assign(finalResult, { timeExpireDate, timeExpireDateString })
   }
 
   return orderKeys(finalResult)
