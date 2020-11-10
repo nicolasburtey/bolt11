@@ -28,6 +28,12 @@ const SIMNETWORK = {
   scriptHash: 0x7b,
   validWitnessVersions: [0]
 }
+const REGNETWORK = {
+  bech32: 'bcrt',
+  pubKeyHash: 0x6f,
+  scriptHash: 0xc4,
+  validWitnessVersions: [0]
+}
 const DEFAULTEXPIRETIME = 3600
 const DEFAULTCLTVEXPIRY = 9
 const DEFAULTDESCRIPTION = ''
@@ -768,6 +774,9 @@ function decode (paymentRequest, network) {
         break
       case SIMNETWORK.bech32:
         coinNetwork = SIMNETWORK
+        break
+      case REGNETWORK.bech32:
+        coinNetwork = REGNETWORK
         break
     }
   } else {
