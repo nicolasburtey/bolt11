@@ -55,7 +55,8 @@ const TAGCODES = {
   expire_time: 6, // default: 3600 (1 hour)
   min_final_cltv_expiry: 24, // default: 9
   fallback_address: 9,
-  routing_info: 3 // for extra routing info (private etc.)
+  routing_info: 3, // for extra routing info (private etc.)
+  username: 31, // added property. not lightnin-rfc compliant
 }
 
 // reverse the keys and values of TAGCODES and insert into TAGNAMES
@@ -69,6 +70,7 @@ for (let i = 0, keys = Object.keys(TAGCODES); i < keys.length; i++) {
 const TAGENCODERS = {
   payment_hash: hexToWord, // 256 bits
   description: textToWord, // string variable length
+  username: textToWord, // string variable length
   payee_node_key: hexToWord, // 264 bits
   purpose_commit_hash: purposeCommitEncoder, // 256 bits
   expire_time: intBEToWords, // default: 3600 (1 hour)
@@ -82,6 +84,7 @@ const TAGPARSERS = {
   13: (words) => wordsToBuffer(words, true).toString('utf8'), // string variable length
   19: (words) => wordsToBuffer(words, true).toString('hex'), // 264 bits
   23: (words) => wordsToBuffer(words, true).toString('hex'), // 256 bits
+  31: (words) => wordsToBuffer(words, true).toString('utf8'), // string variable length // username
   6: wordsToIntBE, // default: 3600 (1 hour)
   24: wordsToIntBE, // default: 9
   9: fallbackAddressParser,
